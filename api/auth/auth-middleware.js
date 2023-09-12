@@ -1,6 +1,9 @@
 const { JWT_SECRET } = require("../secrets"); // use this secret!
+const jwt=require('jsonwebtoken')
+const Users=require('./../users/users-model')
 
 const restricted = (req, res, next) => {
+  //next()-----作为最开始搭建系统时候的占位代码
   /*
     If the user does not provide a token in the Authorization header:
     status 401
@@ -16,6 +19,19 @@ const restricted = (req, res, next) => {
 
     Put the decoded token in the req object, to make life easier for middlewares downstream!
   */
+ const token=req.headers.authorization
+ if(token){
+   jwt.verify(token, JWT_SECRET,(err,decoded)=>{
+    if(err){
+      next({ status: 401, message: "Token invalid" })
+    }else{
+      req.decodedJwt=decoded
+      next()
+    }
+   })
+ }else{
+   next({ status: 401, message: "Token required" })
+ }
 }
 
 const only = role_name => (req, res, next) => {
@@ -29,6 +45,11 @@ const only = role_name => (req, res, next) => {
 
     Pull the decoded token from the req object, to avoid verifying it again!
   */
+  if (req.decodedJwt && req.decodedJwt.role_name===role_name){
+    next()
+  }else{
+    next({ status: 403, message: "This is not for you" })
+  }
 }
 
 
@@ -40,6 +61,16 @@ const checkUsernameExists = (req, res, next) => {
       "message": "Invalid credentials"
     }
   */
+ const {username}=req.body
+  Users.findBy({username})
+       .then(user=>{
+        if(user){
+          next()
+        }else{
+          next({ status: 401, message: "Invalid credentials" })
+        }
+       })
+       .catch(next)
 }
 
 
@@ -62,6 +93,19 @@ const validateRoleName = (req, res, next) => {
       "message": "Role name can not be longer than 32 chars"
     }
   */
+
+  if (!req.body.role_name || !req.body.role_name.trim()){
+    req.body.role_name = "student"
+    next()
+  } else if (req.body.role_name.trim().length>32){
+   next({ status: 422, "message": "Role name can not be longer than 32 chars" })
+  } else if (req.body.role_name.trim() === "admin") {
+    next({ status: 422, "message": "Role name can not be admin" })
+ }else{
+    req.body.role_name = req.body.role_name.trim()
+  next()
+ }
+  
 }
 
 module.exports = {
